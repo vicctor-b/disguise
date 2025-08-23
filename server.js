@@ -1,22 +1,52 @@
 import express from "express";
-import fetch from "node-fetch";
+import sqlite3 from "sqlite3";
+import http from "http";
+import { open } from "sqlite";
+import Mob from "./mob.js";
+import { WebSocketServer, WebSocket } from "ws";
+import { count } from "console";
 
 const app = express();
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+let remainingTime = 30;
+let selectedMob = new Mob();
+const clients = new Set();
 
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  next();
+const dbPromise = open({
+  filename: "./database.db",
+  driver: sqlite3.Database
 });
 
-app.get("/monster/:id", async (req, res) => {
+wss.on("connection", (ws) => {
+  ws.send("[!] Connected to WSS");
+  clients.add(ws);
+  ws.on("message", (message) => {
+    if(message === selectedMob.iName){
+      for(client in clients){
+        client.send(`{"answer": "${selectedMob.iName}"}`)
+      }
+    }
+  });
+});
+
+function countdown(){
+  remainingTime--;
+}
+
+async function getNextMob() {
+  const db = await dbPromise;
+  remainingTime = 30;
   try {
-    const response = await fetch(`https://ragnapi.com/api/v1/old-times/monsters/${req.params.id}`);
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ error: "Erro ao buscar monstro" });
+    const result = await db.get("SELECT * FROM mob_db ORDER BY RANDOM() LIMIT 1;")
+    selectedMob = new Mob(result);
+  } catch (err) {
+    console.error("[Daily Job] Error:", err);
   }
-});
+}
 
-app.listen(3000, () => console.log("Proxy rodando em http://localhost:3000"));
+getNextMob();
+setInterval(()=> remainingTime > 0 ? countdown : getNextMob, 1000);
+
+app.listen(3000, () => console.log("Server rodando em http://localhost:3000"));
+
