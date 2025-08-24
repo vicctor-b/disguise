@@ -124,7 +124,7 @@ wss.on("connection", (ws, req) => {
       currentMobSolved = true;
       remainingTime = 6; // Define 6 segundos para mostrar a resposta
       updateScore(userId);
-      const newScore = scoreboard.get(userId);
+      const newScore = scoreboard.get(userName) || 0;
       console.log(`[Score] ${playerName} ganhou 1 ponto! Total: ${newScore}`);
       
       updateMobHistory('solved', userId);
