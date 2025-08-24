@@ -25,7 +25,7 @@
       gap: 20px;
       max-width: 1260px;
       width: 100%;
-      align-items: stretch;
+      align-items: start;
       justify-content: center;
       margin: 0 auto;
     }
@@ -561,9 +561,70 @@
       background: rgba(255, 255, 255, 0.3);
       border-radius: 3px;
     }
+
+    /* Modal de conexão */
+    .connection-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 1000;
+      backdrop-filter: blur(8px);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .connection-modal.visible {
+      display: flex;
+    }
+
+    .connection-modal .status {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 20px 40px;
+      border-radius: 15px;
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #ffd700;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .connection-modal .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid rgba(255, 215, 0, 0.3);
+      border-top: 3px solid #ffd700;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .connection-modal .message {
+      color: rgba(255, 255, 255, 0.7);
+      text-align: center;
+      max-width: 400px;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
+  <div class="connection-modal visible" id="connectionModal">
+    <div class="status">
+      <div class="spinner"></div>
+      <span>Reconectando...</span>
+    </div>
+    <div class="message">
+      Perdemos a conexão com o servidor. Tentando reconectar automaticamente...
+      <br>
+      Se o problema persistir, tente recarregar a página.
+    </div>
+  </div>
+
   <div class="main-container">
     <div class="scoreboard-panel">
       <h3>🏆 Placar</h3>
@@ -606,41 +667,68 @@
     const urlParams = new URLSearchParams(window.location.search);
     const playerName = urlParams.get('name');
 
-    // Function to check answer
-    function checkAnswer() {
-      const guessInput = document.getElementById('guess');
-      const guess = guessInput.value.trim();
-      
-      if (guess) {
-        // Send the guess to the server
-        socket.send(guess);
-        
-        // Clear the input
-        guessInput.value = '';
-        
-        // Return focus to input for next guess
-        guessInput.focus();
-      }
-    }
-
-    // Add enter key support for submitting guess
-    document.getElementById('guess').addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') {
-        checkAnswer();
-      }
-    });
-
-    // If no name provided, redirect to login
-    if (!playerName) {
-      window.location.href = 'login.html';
-    }
-
-    // Create WebSocket connection with player name
+    // Configurações do WebSocket
     const wsProtocol = window.location.hostname === '' ? 'ws:' : 'wss:';
     const wsHost = window.location.hostname === '' ? 'localhost:3000' : "disguise.onrender.com";
-    const socket = new WebSocket(`${wsProtocol}//${wsHost}?name=${encodeURIComponent(playerName)}`);
+    const wsUrl = `${wsProtocol}//${wsHost}?name=${encodeURIComponent(playerName)}`;
     
-    socket.onmessage = function(event) {
+    let socket = null;
+    let reconnectAttempts = 0;
+    let reconnectInterval = null;
+    const maxReconnectAttempts = 5;
+    const baseReconnectDelay = 1000; // 1 segundo
+    let isConnected = false;
+
+    function showConnectionModal(show) {
+      document.getElementById('connectionModal').classList.toggle('visible', show);
+    }
+
+    function scheduleReconnect() {
+      if (reconnectInterval) return; // Já está tentando reconectar
+
+      if (reconnectAttempts >= maxReconnectAttempts) {
+        console.log('Número máximo de tentativas de reconexão atingido');
+        return;
+      }
+
+      const delay = Math.min(baseReconnectDelay * Math.pow(2, reconnectAttempts), 10000);
+      console.log(`Tentando reconectar em ${delay}ms (tentativa ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
+      
+      reconnectInterval = setTimeout(() => {
+        reconnectAttempts++;
+        connect();
+        reconnectInterval = null;
+      }, delay);
+    }
+
+    function connect() {
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+        return; // Já está conectado ou conectando
+      }
+
+      socket = new WebSocket(wsUrl);
+
+      socket.onopen = function() {
+        console.log('WebSocket conectado');
+        isConnected = true;
+        reconnectAttempts = 0;
+        showConnectionModal(false);
+        clearInterval(reconnectInterval);
+      };
+
+      socket.onclose = function() {
+        console.log('WebSocket desconectado');
+        isConnected = false;
+        showConnectionModal(true);
+        scheduleReconnect();
+      };
+
+      socket.onerror = function(error) {
+        console.error('Erro no WebSocket:', error);
+        isConnected = false;
+      };
+
+        socket.onmessage = function(event) {
       const data = JSON.parse(event.data);
       
       if (data.type === 'gameStatus') {
@@ -750,6 +838,51 @@
         }
       }
     };
+
+    }
+
+    // Reconectar quando a página ganhar foco
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !isConnected) {
+        console.log('Página recuperou foco, tentando reconectar...');
+        connect();
+      }
+    });
+
+    // Iniciar conexão
+    connect();
+
+    function checkAnswer(){
+    // Function to check answer
+      const guessInput = document.getElementById('guess');
+      const guess = guessInput.value.trim();
+      
+      if (guess) {
+        // Send the guess to the server
+        socket.send(guess);
+        
+        // Clear the input
+        guessInput.value = '';
+        
+        // Return focus to input for next guess
+        guessInput.focus();
+      }
+    }
+
+    // Add enter key support for submitting guess
+    document.getElementById('guess').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        checkAnswer();
+      }
+    });
+
+    // If no name provided, redirect to login
+    if (!playerName) {
+      window.location.href = 'login.html';
+    }
+
+    // Iniciar primeira conexão
+    connect();
   </script>
 </body>
 </html>
