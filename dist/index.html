@@ -473,17 +473,45 @@
       padding: 8px 12px;
       margin: 5px 0;
       border-radius: 8px;
-      background: rgba(248, 113, 113, 0.2);
-      border-left: 4px solid #f87171;
-      color: #f87171;
       font-size: 14px;
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
+    .attempt.success {
+      background: rgba(74, 222, 128, 0.2);
+      border-left: 4px solid #4ade80;
+      color: #4ade80;
+    }
+
+    .attempt.failure {
+      background: rgba(248, 113, 113, 0.2);
+      border-left: 4px solid #f87171;
+      color: #f87171;
+    }
+
+    .attempt.ignored {
+      background: rgba(148, 163, 184, 0.2);
+      border-left: 4px solid #94a3b8;
+      color: #94a3b8;
+      opacity: 0.7;
+      font-style: italic;
+    }
+
     .attempt .player-name {
       font-weight: bold;
+    }
+
+    .attempt.ignored .player-name {
+      color: #94a3b8;
+    }
+
+    .attempt.success .player-name {
+      color: #6ee7a0;
+    }
+
+    .attempt.failure .player-name {
       color: #ff8787;
     }
 
@@ -560,7 +588,7 @@
       <div class="timer" id="timer">Tempo restante: 20</div>
       
       <div class="attempts" id="attempts" style="display: none;">
-        <h3>❌ Tentativas Erradas:</h3>
+        <h3>📝 Tentativas:</h3>
         <div id="attempts-list"></div>
       </div>
     </div>
@@ -608,8 +636,8 @@
     }
 
     // Create WebSocket connection with player name
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'wss:';
-    const wsHost = window.location.hostname === 'localhost' ? 'localhost:3000' : "disguise.onrender.com";
+    const wsProtocol = window.location.hostname === '' ? 'ws:' : 'wss:';
+    const wsHost = window.location.hostname === '' ? 'localhost:3000' : "disguise.onrender.com";
     const socket = new WebSocket(`${wsProtocol}//${wsHost}?name=${encodeURIComponent(playerName)}`);
     
     socket.onmessage = function(event) {
@@ -696,21 +724,25 @@
         const attemptsContainer = document.getElementById('attempts');
         const attemptsList = document.getElementById('attempts-list');
         
-        // Filter only failed attempts
-        const failedAttempts = data.attempts.filter(attempt => !attempt.success);
-        
-        if (failedAttempts.length >= 0) {
+        if (data.attempts.length >= 0) {
           attemptsContainer.style.display = 'block';
-          attemptsList.innerHTML = [...failedAttempts].reverse().map(attempt => {
+          attemptsList.innerHTML = [...data.attempts].reverse().map(attempt => {
             const formattedTime = new Date(attempt.timestamp).toLocaleTimeString('pt-BR', {
               hour: '2-digit',
               minute: '2-digit',
               second: '2-digit'
             });
+            // Determina a classe com base no status da tentativa
+            const getAttemptClass = (attempt) => {
+              if (attempt.ignored) return 'ignored';
+              return attempt.success ? 'success' : 'failure';
+            };
+
             return `
-              <div class="attempt">
+              <div class="attempt ${getAttemptClass(attempt)}">
                 <span class="player-name">${attempt.playerName}:</span> 
-                "${attempt.attempt}" 
+                "${attempt.attempt}"
+                ${attempt.ignored ? ' (ignorado)' : ''} 
                 <span class="attempt-time">${formattedTime}</span>
               </div>
             `;

@@ -59,6 +59,7 @@ function addAttempt(userId, attempt, success) {
     userId,
     attempt,
     success,
+    ignored: currentMobSolved,
     timestamp: Date.now()
   });
 }
