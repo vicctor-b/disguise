@@ -109,9 +109,6 @@
     }
     
     .history-item img {
-      width: 120px;
-      height: 120px;
-      object-fit: cover;
       border-radius: 10px;
       margin: 0 auto 15px auto;
       display: block;
@@ -216,6 +213,10 @@
       min-height: 150px;
       flex-shrink: 0;
     }
+
+    .image-container img {
+      transform: scale(1.5);
+    }
     
     img {
       max-width: 150px;
@@ -226,7 +227,7 @@
     }
     
     img:hover {
-      transform: scale(1.05);
+      transform: scale(1.55);
     }
     
     .loading {
@@ -589,6 +590,16 @@
             </div>
           `;
         }).join('');
+
+        // Update answer display
+        const answerElement = document.getElementById('answer');
+        if (data.currentMobSolved) {
+          answerElement.textContent = `${data.solverName} acertou! Eu era "${data.currentMob.name}!"`;
+          answerElement.className = 'answer has-content correct';
+        } else {
+          answerElement.textContent = '';
+          answerElement.className = 'answer';
+        }
 
         // Update timer
         const timerElement = document.getElementById('timer');

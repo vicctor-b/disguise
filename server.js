@@ -35,6 +35,8 @@ function broadcastGameStatus() {
     type: 'gameStatus',
     currentMob: { id: selectedMob.ID, name: currentMobSolved ? selectedMob.iName : '???' },
     remainingTime,
+    currentMobSolved,
+    solverName: currentMobSolved ? (clients.get(currentAttempts.find(attempt => attempt.success)?.userId)?.playerName || 'Unknown') : null,
     attempts: currentAttempts.map(attempt => ({
       ...attempt,
       playerName: clients.get(attempt.userId)?.playerName || attempt.userId
@@ -42,7 +44,6 @@ function broadcastGameStatus() {
     scoreboard: scoreboardWithNames,
     mobHistory: mobHistory.map(hist => ({
       ...hist,
-      solverName: hist.solverId ? (clients.get(hist.solverId)?.playerName || hist.solverId) : null,
       attempts: hist.attempts.map(attempt => ({
         ...attempt,
         playerName: clients.get(attempt.userId)?.playerName || attempt.userId
@@ -73,6 +74,7 @@ function updateMobHistory(status, solverId = null) {
     mobName: selectedMob.iName,
     status,
     solverId,
+    solverName: solverId ? (clients.get(solverId)?.playerName || 'Unknown') : null,
     startTime: currentMobStartTime,
     endTime: Date.now(),
     attempts: currentAttempts
@@ -120,11 +122,12 @@ wss.on("connection", (ws, req) => {
 
     if (isCorrect) {
       currentMobSolved = true;
+      remainingTime = 6; // Define 6 segundos para mostrar a resposta
       updateScore(userId);
       const newScore = scoreboard.get(userId);
       console.log(`[Score] ${playerName} ganhou 1 ponto! Total: ${newScore}`);
+      
       updateMobHistory('solved', userId);
-      getNextMob(); // Pula para o próximo mob imediatamente
     }
 
     // Atualiza todos os clients sobre a nova tentativa
