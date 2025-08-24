@@ -22,12 +22,63 @@
     
     .main-container {
       display: flex;
-      gap: 30px;
-      max-width: 1060px;
+      gap: 20px;
+      max-width: 1260px;
       width: 100%;
-      align-items: stretch; /* Faz os dois painéis terem a mesma altura */
+      align-items: stretch;
       justify-content: center;
       margin: 0 auto;
+    }
+
+    .scoreboard-panel {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      width: 300px;
+      min-width: 300px;
+      max-width: 300px;
+      display: flex;
+      flex-direction: column;
+      height: 80vh;
+      max-height: 80vh;
+    }
+
+    .scoreboard-panel h3 {
+      color: #ffd700;
+      text-align: center;
+      margin: 0 0 20px 0;
+      font-size: 1.2em;
+    }
+
+    .scoreboard-content {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .score-item {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 15px;
+      padding: 12px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .score-item .player-name {
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .score-item .score {
+      background: rgba(255, 215, 0, 0.2);
+      padding: 4px 12px;
+      border-radius: 12px;
+      color: #ffd700;
+      font-weight: bold;
     }
     
     .container {
@@ -49,15 +100,15 @@
     }
     
     .history-panel {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.05);
       backdrop-filter: blur(10px);
       border-radius: 20px;
       padding: 20px;
-      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      width: 500px;
-      min-width: 500px;
-      max-width: 500px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      width: 400px;
+      min-width: 400px;
+      max-width: 400px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -480,6 +531,11 @@
 </head>
 <body>
   <div class="main-container">
+    <div class="scoreboard-panel">
+      <h3>🏆 Placar</h3>
+      <div class="scoreboard-content" id="scoreboard">
+      </div>
+    </div>
     <div class="container">
       <h1>Qual é o monstro?</h1>
       
@@ -493,7 +549,6 @@
       <div class="input-container">
         <input type="text" id="guess" placeholder="Digite o nome do monstro" autocomplete="off">
         <button onclick="checkAnswer()">Enviar</button>
-        <button onclick="revealAnswer()" class="reveal-btn">Revelar</button>
       </div>
       
       <div class="timer" id="timer">Tempo restante: 20</div>
@@ -555,6 +610,19 @@
       const data = JSON.parse(event.data);
       
       if (data.type === 'gameStatus') {
+        // Update scoreboard
+        const scoreboardContent = document.getElementById('scoreboard');
+        if (data.scoreboard) {
+          scoreboardContent.innerHTML = data.scoreboard
+            .sort((a, b) => b[1] - a[1])
+            .map(([player, score]) => `
+              <div class="score-item">
+                <span class="player-name">${player}</span>
+                <span class="score">${score}</span>
+              </div>
+            `).join('');
+        }
+
         // Update monster image
         const monsterImg = document.getElementById('monster-img');
         monsterImg.src = `https://vitcunha.s3.sa-east-1.amazonaws.com/ragnadb/gifs/${data.currentMob.id}.gif`;
@@ -567,8 +635,8 @@
           const statusClass = mob.status === 'solved' ? 'correct' : 
                             mob.status === 'timeout' ? 'timeout' : 'reveal';
           
-          // Format the duration
-          const duration = Math.floor((mob.endTime - mob.startTime) / 1000); // Convert to seconds
+          // Format the duration with 2 decimal places
+          const duration = ((mob.endTime - mob.startTime) / 1000).toFixed(2); // Convert to seconds with decimals
           const formattedTime = new Date(mob.endTime).toLocaleTimeString('pt-BR', { 
             hour: '2-digit', 
             minute: '2-digit',

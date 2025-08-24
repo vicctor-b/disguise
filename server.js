@@ -25,11 +25,6 @@ const dbPromise = open({
 });
 
 function broadcastGameStatus() {
-  // Converter scoreboard para incluir nomes dos jogadores
-  const scoreboardWithNames = Array.from(scoreboard).map(([userId, score]) => {
-    const playerName = clients.get(userId)?.playerName || userId;
-    return [playerName, score];
-  });
 
   const gameStatus = {
     type: 'gameStatus',
@@ -41,7 +36,7 @@ function broadcastGameStatus() {
       ...attempt,
       playerName: clients.get(attempt.userId)?.playerName || attempt.userId
     })),
-    scoreboard: scoreboardWithNames,
+    scoreboard: scoreboard,
     mobHistory: mobHistory.map(hist => ({
       ...hist,
       attempts: hist.attempts.map(attempt => ({
@@ -88,7 +83,8 @@ function updateMobHistory(status, solverId = null) {
 
 function updateScore(userId) {
   const currentScore = scoreboard.get(userId) || 0;
-  scoreboard.set(userId, currentScore + 1);
+  const userName = clients.get(userId)?.playerName || 'Unknown';
+  scoreboard.set(userId, userName, currentScore + 1);
 }
 
 wss.on("connection", (ws, req) => {
