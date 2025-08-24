@@ -80,6 +80,12 @@
       color: #ffd700;
       font-weight: bold;
     }
+
+    .score-item.no-scores {
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.6);
+      font-style: italic;
+    }
     
     .container {
       background: rgba(255, 255, 255, 0.1);
@@ -612,15 +618,23 @@
       if (data.type === 'gameStatus') {
         // Update scoreboard
         const scoreboardContent = document.getElementById('scoreboard');
-        if (data.scoreboard) {
-          scoreboardContent.innerHTML = data.scoreboard
-            .sort((a, b) => b[1] - a[1])
-            .map(([player, score]) => `
-              <div class="score-item">
-                <span class="player-name">${player}</span>
-                <span class="score">${score}</span>
+        if (scoreboardContent) {  // Check if element exists
+          if (Array.isArray(data.scoreboard) && data.scoreboard.length > 0) {
+            scoreboardContent.innerHTML = data.scoreboard
+              .sort((a, b) => b[1] - a[1])
+              .map(([player, score]) => `
+                <div class="score-item">
+                  <span class="player-name">${player}</span>
+                  <span class="score">${score}</span>
+                </div>
+              `).join('');
+          } else {
+            scoreboardContent.innerHTML = `
+              <div class="score-item no-scores">
+                <span>Nenhuma pontuação ainda</span>
               </div>
-            `).join('');
+            `;
+          }
         }
 
         // Update monster image
