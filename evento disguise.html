@@ -547,7 +547,9 @@
     }
 
     // Create WebSocket connection with player name
-    const socket = new WebSocket(`ws://localhost:3000?name=${encodeURIComponent(playerName)}`);
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'wss:';
+    const wsHost = window.location.hostname === 'localhost' ? 'localhost:3000' : "disguise.onrender.com";
+    const socket = new WebSocket(`${wsProtocol}//${wsHost}?name=${encodeURIComponent(playerName)}`);
     
     socket.onmessage = function(event) {
       const data = JSON.parse(event.data);

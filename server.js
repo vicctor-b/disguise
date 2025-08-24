@@ -185,9 +185,12 @@ getNextMob();
 // Timer para countdown
 setInterval(countdown, 1000);
 
+// Usar a porta do ambiente ou 3000 como fallback
+const PORT = process.env.PORT || 3000;
+
 // Usar o servidor HTTP que tem o WebSocket vinculado
-server.listen(3000, () => {
-  console.log("[Server] HTTP e WebSocket rodando em http://localhost:3000");
-  console.log("[WebSocket] Endpoint: ws://localhost:3000");
+server.listen(PORT, () => {
+  console.log(`[Server] HTTP e WebSocket rodando na porta ${PORT}`);
+  console.log(`[WebSocket] Endpoint: ws://localhost:${PORT}`);
 });
 
