@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Login - Quiz de Monstros Ragnarok</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      width: 90%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 2em;
+      margin-bottom: 30px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+      background: linear-gradient(45deg, #ffd700, #ff6b35);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .input-group {
+      margin-bottom: 25px;
+    }
+
+    input {
+      width: 100%;
+      padding: 15px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 25px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #333;
+      outline: none;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    input:focus {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+      background: rgba(255, 255, 255, 1);
+    }
+
+    button {
+      width: 100%;
+      padding: 15px 25px;
+      font-size: 16px;
+      border: none;
+      border-radius: 25px;
+      background: linear-gradient(45deg, #ff6b35, #f7931e);
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: bold;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+      background: linear-gradient(45deg, #f7931e, #ff6b35);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      background: rgba(150, 150, 150, 0.5);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .error-message {
+      color: #f87171;
+      font-size: 14px;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .character {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 20px;
+      border-radius: 60px;
+      overflow: hidden;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    }
+
+    .character img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="character">
+      <img src="https://vitcunha.s3.sa-east-1.amazonaws.com/ragnadb/gifs/1002.gif" alt="Poring">
+    </div>
+    <h1>Quiz de Monstros</h1>
+    <div class="input-group">
+      <input 
+        type="text" 
+        id="playerName" 
+        placeholder="Digite seu nome" 
+        maxlength="20"
+        autocomplete="off">
+      <div class="error-message" id="errorMessage">
+        Por favor, digite um nome válido (mínimo 3 caracteres)
+      </div>
+    </div>
+    <button id="connectButton" onclick="connectToGame()">Conectar</button>
+  </div>
+
+  <script>
+    const playerNameInput = document.getElementById('playerName');
+    const connectButton = document.getElementById('connectButton');
+    const errorMessage = document.getElementById('errorMessage');
+
+    function validateName(name) {
+      return name && name.trim().length >= 3;
+    }
+
+    playerNameInput.addEventListener('input', function() {
+      const name = this.value;
+      connectButton.disabled = !validateName(name);
+      errorMessage.style.display = validateName(name) ? 'none' : 'block';
+    });
+
+    playerNameInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter' && validateName(this.value)) {
+        connectToGame();
+      }
+    });
+
+    function connectToGame() {
+      const playerName = playerNameInput.value.trim();
+      
+      if (validateName(playerName)) {
+        // Redireciona para a página do jogo com o nome como parâmetro
+        window.location.href = `evento disguise.html?name=${encodeURIComponent(playerName)}`;
+      }
+    }
+  </script>
+</body>
+</html>

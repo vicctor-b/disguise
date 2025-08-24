@@ -129,9 +129,26 @@
     .history-item .result {
       font-size: 14px;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       gap: 5px;
+    }
+
+    .history-item .result-text {
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .history-item .timestamp {
+      font-size: 12px;
+      opacity: 0.8;
+      font-family: monospace;
+    }
+
+    .history-item .solver {
+      font-weight: bold;
+      text-decoration: underline;
     }
     
     .history-item.correct .result {
@@ -380,7 +397,7 @@
       background: rgba(0, 0, 0, 0.2);
       border-radius: 15px;
       padding: 12px;
-      max-height: 120px;
+      max-height: 520px;
       min-height: 40px;
       overflow-y: auto;
       overflow-x: hidden;
@@ -401,6 +418,22 @@
       background: rgba(248, 113, 113, 0.2);
       border-left: 4px solid #f87171;
       color: #f87171;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .attempt .player-name {
+      font-weight: bold;
+      color: #ff8787;
+    }
+
+    .attempt .attempt-time {
+      margin-left: auto;
+      opacity: 0.7;
+      font-family: monospace;
+      font-size: 12px;
     }
     
     .attempts::-webkit-scrollbar {
@@ -453,7 +486,7 @@
       
       <div class="image-container">
         <div class="loading" id="loading"></div>
-        <img id="monster-img" src="" alt="Monstro" style="display: none;">
+        <img id="monster-img" src="https://vitcunha.s3.sa-east-1.amazonaws.com/ragnadb/gifs/1639.gif" alt="Monstro" style="display: none;">
       </div>
       
       <div class="input-container">
@@ -479,282 +512,117 @@
   </div>
 
   <script>
-    const proxyUrl = "http://localhost:3000/monster"; // Proxy local
-    let monsterData = null;
-    let timer = 20;
-    let countdown;
-    let wrongAttempts = [];
-    let monsterHistory = [];
-    let currentMonsterResult = null;
-    let isAnswered = false; // Flag para controlar se já foi respondido
+    // Get player name from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const playerName = urlParams.get('name');
 
-    // Função para tratar o nome do monstro
-    function formatMonsterName(name) {
-      if (!name) return "Desconhecido";
-      return name.replace(/_/g, ' ').trim();
+    // Function to check answer
+    function checkAnswer() {
+      const guessInput = document.getElementById('guess');
+      const guess = guessInput.value.trim();
+      
+      if (guess) {
+        // Send the guess to the server
+        socket.send(guess);
+        
+        // Clear the input
+        guessInput.value = '';
+        
+        // Return focus to input for next guess
+        guessInput.focus();
+      }
     }
 
-    // Função para normalizar texto para comparação
-    function normalizeText(text) {
-      return text.toLowerCase()
-        .replace(/_/g, ' ')
-        .replace(/[^a-z0-9\s]/g, '')
-        .trim();
-    }
-
-    // Event listener para Enter
-    document.addEventListener('DOMContentLoaded', function() {
-      const input = document.getElementById('guess');
-      input.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !isAnswered) {
-          checkAnswer();
-        }
-      });
+    // Add enter key support for submitting guess
+    document.getElementById('guess').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        checkAnswer();
+      }
     });
 
-    function showLoading() {
-      document.getElementById('loading').style.display = 'block';
-      document.getElementById('monster-img').style.display = 'none';
+    // If no name provided, redirect to login
+    if (!playerName) {
+      window.location.href = 'login.html';
     }
 
-    function hideLoading() {
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('monster-img').style.display = 'block';
-    }
+    // Create WebSocket connection with player name
+    const socket = new WebSocket(`ws://localhost:3000?name=${encodeURIComponent(playerName)}`);
+    
+    socket.onmessage = function(event) {
+      const data = JSON.parse(event.data);
+      
+      if (data.type === 'gameStatus') {
+        // Update monster image
+        const monsterImg = document.getElementById('monster-img');
+        monsterImg.src = `https://vitcunha.s3.sa-east-1.amazonaws.com/ragnadb/gifs/${data.currentMob.id}.gif`;
+        monsterImg.style.display = 'block';
+        document.getElementById('loading').style.display = 'none';
 
-    function addToHistory(monster, result, attempts = []) {
-      const historyItem = {
-        monster: monster,
-        result: result,
-        attempts: attempts,
-        timestamp: new Date()
-      };
-      
-      // Adiciona no início do array (mais recente primeiro)
-      monsterHistory.unshift(historyItem);
-      
-      // Limita o histórico a 8 itens para não crescer demais
-      if (monsterHistory.length > 8) {
-        monsterHistory = monsterHistory.slice(0, 8);
-      }
-      
-      updateHistoryDisplay();
-    }
+        // Update history content
+        const historyContent = document.getElementById('monster-history');
+        historyContent.innerHTML = [...data.mobHistory].reverse().map(mob => {
+          const statusClass = mob.status === 'solved' ? 'correct' : 
+                            mob.status === 'timeout' ? 'timeout' : 'reveal';
+          
+          // Format the duration
+          const duration = Math.floor((mob.endTime - mob.startTime) / 1000); // Convert to seconds
+          const formattedTime = new Date(mob.endTime).toLocaleTimeString('pt-BR', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit'
+          });
 
-    function updateHistoryDisplay() {
-      const historyContainer = document.getElementById('monster-history');
-      historyContainer.innerHTML = '';
-      
-      if (monsterHistory.length === 0) {
-        historyContainer.innerHTML = '<div style="text-align: center; color: #888; padding: 20px; font-style: italic;">Nenhum monstro ainda...</div>';
-        return;
-      }
-      
-      monsterHistory.forEach(item => {
-        const historyDiv = document.createElement('div');
-        historyDiv.className = `history-item ${item.result}`;
+          // Format the result message based on status
+          const resultText = mob.status === 'solved' ? 
+            `<span class="solver">✨ ${mob.solverName}</span> acertou em ${duration}s` : 
+            mob.status === 'timeout' ? 
+            '⌛ Tempo Esgotado!' : 'Revelado';
+
+          return `
+            <div class="history-item ${statusClass}">
+              <img src="https://vitcunha.s3.sa-east-1.amazonaws.com/ragnadb/gifs/${mob.mobId}.gif" alt="${mob.mobName}">
+              <div class="monster-name">${mob.mobName}</div>
+              <div class="result">
+                <div class="result-text">${resultText}</div>
+                <div class="timestamp">${formattedTime}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        // Update timer
+        const timerElement = document.getElementById('timer');
+        timerElement.textContent = `Tempo restante: ${data.remainingTime}`;
         
-        const resultIcon = item.result === 'correct' ? '✅' : 
-                          item.result === 'timeout' ? '⏰' : 
-                          item.result === 'reveal' ? '🔍' : '❌';
-        const resultText = item.result === 'correct' ? 'Acertou!' : 
-                          item.result === 'timeout' ? 'Tempo esgotado' : 
-                          item.result === 'reveal' ? 'Revelado' :
-                          `${item.attempts.length} tentativa(s) errada(s)`;
+        // Add warning class if time is running low (less than 5 seconds)
+        timerElement.className = 'timer' + (data.remainingTime <= 5 ? ' warning' : '');
+
+        // Update attempts list
+        const attemptsContainer = document.getElementById('attempts');
+        const attemptsList = document.getElementById('attempts-list');
         
-        historyDiv.innerHTML = `
-          <img src="${item.monster.gif || ''}" alt="${formatMonsterName(item.monster.monster_info)}" onerror="this.style.display='none'">
-          <div class="monster-name">${formatMonsterName(item.monster.monster_info)}</div>
-          <div class="result">${resultIcon} ${resultText}</div>
-        `;
+        // Filter only failed attempts
+        const failedAttempts = data.attempts.filter(attempt => !attempt.success);
         
-        historyContainer.appendChild(historyDiv);
-      });
-    }
-
-    async function getRandomMonster() {
-      // Adiciona o monstro anterior ao histórico se existir
-      if (monsterData && currentMonsterResult) {
-        addToHistory(monsterData, currentMonsterResult, wrongAttempts);
-      }
-      
-      showLoading();
-      clearInterval(countdown);
-      
-      // Reset da interface
-      const answerElement = document.getElementById("answer");
-      answerElement.textContent = "";
-      answerElement.className = "answer";
-      document.getElementById("guess").value = "";
-      document.getElementById("attempts").style.display = "none";
-      document.getElementById("attempts-list").innerHTML = "";
-      wrongAttempts = [];
-      currentMonsterResult = null;
-      isAnswered = false; // Reset do flag
-      
-      // Reabilita input e botões
-      document.getElementById("guess").disabled = false;
-      document.querySelector('button[onclick="checkAnswer()"]').disabled = false;
-      document.querySelector('button[onclick="revealAnswer()"]').disabled = false;
-      
-      // Limpa a variável da imagem do monstro anterior
-      monsterData = null;
-      
-      timer = 20;
-      updateTimer();
-
-      // Gera ID aleatório
-      const randomId = Math.floor(Math.random() * (2000 - 1001) + 1001);
-
-      try {
-        const response = await fetch(`${proxyUrl}/${randomId}`);
-        if (!response.ok) throw new Error("Erro ao buscar monstro");
-
-        monsterData = await response.json();
-
-        // Exibir imagem
-        const img = document.getElementById("monster-img");
-        img.src = monsterData.gif || "";
-        img.alt = formatMonsterName(monsterData.monster_info) || "Monstro";
-        
-        hideLoading();
-        startCountdown();
-      } catch (error) {
-        console.error(error);
-        hideLoading();
-        setTimeout(() => getRandomMonster(), 1000); // tenta novamente após 1 segundo
-      }
-    }
-
-    function updateTimer() {
-      const timerElement = document.getElementById("timer");
-      timerElement.textContent = `Tempo restante: ${timer}`;
-      
-      if (timer <= 5) {
-        timerElement.classList.add('warning');
-      } else {
-        timerElement.classList.remove('warning');
-      }
-    }
-
-    function startCountdown() {
-      countdown = setInterval(() => {
-        timer--;
-        updateTimer();
-        
-        if (timer <= 0) {
-          clearInterval(countdown);
-          currentMonsterResult = 'timeout';
-          showAnswer();
+        if (failedAttempts.length >= 0) {
+          attemptsContainer.style.display = 'block';
+          attemptsList.innerHTML = [...failedAttempts].reverse().map(attempt => {
+            const formattedTime = new Date(attempt.timestamp).toLocaleTimeString('pt-BR', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            });
+            return `
+              <div class="attempt">
+                <span class="player-name">${attempt.playerName}:</span> 
+                "${attempt.attempt}" 
+                <span class="attempt-time">${formattedTime}</span>
+              </div>
+            `;
+          }).join('');
         }
-      }, 1000);
-    }
-
-    function showAnswer() {
-      const name = formatMonsterName(monsterData?.monster_info) || "Desconhecido";
-      const answerElement = document.getElementById("answer");
-      answerElement.textContent = `⏰ Tempo acabou, eu era: ${name}`;
-      answerElement.className = "answer reveal has-content";
-      
-      // Trava input e botões
-      isAnswered = true;
-      document.getElementById("guess").disabled = true;
-      document.querySelector('button[onclick="checkAnswer()"]').disabled = true;
-      document.querySelector('button[onclick="revealAnswer()"]').disabled = true;
-      
-      // Aguarda 5 segundos antes de mudar o monstro para dar tempo de ver a resposta
-      setTimeout(getRandomMonster, 5000);
-    }
-
-    function revealAnswer() {
-      if (!monsterData || isAnswered) return; // Não faz nada se não há monstro ou já foi respondido
-      
-      clearInterval(countdown);
-      currentMonsterResult = 'reveal'; // Novo tipo de resultado
-      
-      const name = formatMonsterName(monsterData?.monster_info) || "Desconhecido";
-      const answerElement = document.getElementById("answer");
-      answerElement.textContent = `🔍 Eu era: ${name}`;
-      answerElement.className = "answer reveal has-content";
-      
-      // Trava input e botões
-      isAnswered = true;
-      document.getElementById("guess").disabled = true;
-      document.querySelector('button[onclick="checkAnswer()"]').disabled = true;
-      document.querySelector('button[onclick="revealAnswer()"]').disabled = true;
-      
-      // Limpa o campo de input
-      document.getElementById("guess").value = "";
-      
-      // Aguarda 3 segundos antes de mudar o monstro
-      setTimeout(getRandomMonster, 3000);
-    }
-
-    function addWrongAttempt(attempt) {
-      wrongAttempts.unshift(attempt); // Adiciona no início (mais recente primeiro)
-      
-      // Limita a 5 tentativas para não crescer demais
-      if (wrongAttempts.length > 5) {
-        wrongAttempts = wrongAttempts.slice(0, 5);
       }
-      
-      const attemptsContainer = document.getElementById("attempts");
-      const attemptsList = document.getElementById("attempts-list");
-      
-      // Limpa a lista e reconstrói (para manter ordem mais recente primeiro)
-      attemptsList.innerHTML = '';
-      wrongAttempts.forEach(wrongAttempt => {
-        const attemptDiv = document.createElement('div');
-        attemptDiv.className = 'attempt';
-        attemptDiv.textContent = `❌ ${wrongAttempt}`;
-        attemptsList.appendChild(attemptDiv);
-      });
-      
-      attemptsContainer.style.display = 'block';
-    }
-
-    function checkAnswer() {
-      const input = document.getElementById("guess");
-      const guess = input.value.trim();
-      
-      if (!guess || isAnswered) return; // Não faz nada se input vazio ou já foi respondido
-      
-      const guessNormalized = normalizeText(guess);
-      const correctNormalized = normalizeText(monsterData?.monster_info || '');
-      const answerElement = document.getElementById("answer");
-      
-      // Limpa o input imediatamente
-      input.value = "";
-      
-      if (guessNormalized === correctNormalized) {
-        const correctName = formatMonsterName(monsterData?.monster_info) || "Desconhecido";
-        answerElement.textContent = `✅ Acertou! Eu era: ${correctName}`;
-        answerElement.className = "answer correct has-content";
-        currentMonsterResult = 'correct';
-        clearInterval(countdown);
-        
-        // Trava input e botões após acertar
-        isAnswered = true;
-        input.disabled = true;
-        document.querySelector('button[onclick="checkAnswer()"]').disabled = true;
-        document.querySelector('button[onclick="revealAnswer()"]').disabled = true;
-        
-        // Aguarda 3 segundos antes de mudar o monstro
-        setTimeout(getRandomMonster, 3000);
-      } else {
-        // Não mostra mensagem de erro, apenas adiciona à lista de tentativas
-        currentMonsterResult = 'incorrect';
-        addWrongAttempt(guess);
-      }
-      
-      // Foca novamente no input apenas se não foi respondido
-      if (!isAnswered) {
-        input.focus();
-      }
-    }
-
-    // Inicia o jogo
-    getRandomMonster();
+    };
   </script>
 </body>
 </html>
