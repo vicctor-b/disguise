@@ -4,49 +4,187 @@ import http from "http";
 import { open } from "sqlite";
 import Mob from "./mob.js";
 import { WebSocketServer, WebSocket } from "ws";
-import { count } from "console";
-
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 let remainingTime = 30;
 let selectedMob = new Mob();
-const clients = new Set();
+const clients = new Map(); // Mudado para Map para associar ID com websocket
+let currentAttempts = [];
+let scoreboard = new Map();
+let mobHistory = [];
+let currentMobSolved = false;
+let currentMobStartTime = Date.now();
 
 const dbPromise = open({
   filename: "./database.db",
   driver: sqlite3.Database
+}).then(async (db) => {
+  await db.exec("PRAGMA encoding = 'UTF-8';"); // force UTF-8
+  return db;
 });
 
-wss.on("connection", (ws) => {
-  ws.send("[!] Connected to WSS");
-  clients.add(ws);
-  ws.on("message", (message) => {
-    if(message === selectedMob.iName){
-      for(client in clients){
-        client.send(`{"answer": "${selectedMob.iName}"}`)
-      }
+function broadcastGameStatus() {
+  // Converter scoreboard para incluir nomes dos jogadores
+  const scoreboardWithNames = Array.from(scoreboard).map(([userId, score]) => {
+    const playerName = clients.get(userId)?.playerName || userId;
+    return [playerName, score];
+  });
+
+  const gameStatus = {
+    type: 'gameStatus',
+    currentMob: { id: selectedMob.ID, name: currentMobSolved ? selectedMob.iName : '???' },
+    remainingTime,
+    attempts: currentAttempts.map(attempt => ({
+      ...attempt,
+      playerName: clients.get(attempt.userId)?.playerName || attempt.userId
+    })),
+    scoreboard: scoreboardWithNames,
+    mobHistory: mobHistory.map(hist => ({
+      ...hist,
+      solverName: hist.solverId ? (clients.get(hist.solverId)?.playerName || hist.solverId) : null,
+      attempts: hist.attempts.map(attempt => ({
+        ...attempt,
+        playerName: clients.get(attempt.userId)?.playerName || attempt.userId
+      }))
+    })),
+  };
+  
+  const message = JSON.stringify(gameStatus);
+  clients.forEach(({ws}) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(message);
     }
+  });
+}
+
+function addAttempt(userId, attempt, success) {
+  currentAttempts.push({
+    userId,
+    attempt,
+    success,
+    timestamp: Date.now()
+  });
+}
+
+function updateMobHistory(status, solverId = null) {
+  mobHistory.push({
+    mobId: selectedMob.ID,
+    mobName: selectedMob.iName,
+    status,
+    solverId,
+    startTime: currentMobStartTime,
+    endTime: Date.now(),
+    attempts: currentAttempts
+  });
+  
+  // Manter apenas os últimos 10 mobs no histórico
+  if (mobHistory.length > 10) {
+    mobHistory.shift();
+  }
+}
+
+function updateScore(userId) {
+  const currentScore = scoreboard.get(userId) || 0;
+  scoreboard.set(userId, currentScore + 1);
+}
+
+wss.on("connection", (ws, req) => {
+  // Pega o nome do parâmetro da URL ou usa timestamp como fallback
+  const url = new URL(req.url, 'ws://localhost');
+  const playerName = url.searchParams.get('name') || `Player${Date.now()}`;
+  const userId = Date.now().toString(); // ID único interno
+  
+  console.log(`[Connection] Novo jogador conectado - Nome: ${playerName} (ID: ${userId})`);
+  ws.send(JSON.stringify({ type: 'connected', userId, playerName }));
+  
+  // Guarda tanto o websocket quanto o nome do jogador
+  clients.set(userId, { ws, playerName });
+
+  console.log(`[Status] Total de jogadores conectados: ${clients.size}`);
+  // Envia o status atual do jogo para o novo client
+  broadcastGameStatus();
+
+  ws.on("message", (data) => {
+    if (currentMobSolved) {
+      console.log(`[Tentativa] Ignorada - Mob já foi descoberto`);
+      return;
+    }
+
+    const message = data.toString();
+    const isCorrect = message === selectedMob.iName;
+    const playerName = clients.get(userId).playerName;
+    
+    console.log(`[Tentativa] ${playerName} tentou: "${message}" - ${isCorrect ? 'ACERTOU!' : 'Errou'}`);
+    addAttempt(userId, message, isCorrect);
+
+    if (isCorrect) {
+      currentMobSolved = true;
+      updateScore(userId);
+      const newScore = scoreboard.get(userId);
+      console.log(`[Score] ${playerName} ganhou 1 ponto! Total: ${newScore}`);
+      updateMobHistory('solved', userId);
+      getNextMob(); // Pula para o próximo mob imediatamente
+    }
+
+    // Atualiza todos os clients sobre a nova tentativa
+    broadcastGameStatus();
+  });
+
+  ws.on("close", () => {
+    const playerName = clients.get(userId)?.playerName;
+    clients.delete(userId);
+    console.log(`[Connection] ${playerName} desconectou (ID: ${userId})`);
+    console.log(`[Status] Total de jogadores conectados: ${clients.size}`);
   });
 });
 
-function countdown(){
+function countdown() {
   remainingTime--;
+  
+  // Log a cada 5 segundos ou quando faltar 5 segundos ou menos
+  if (remainingTime <= 5 || remainingTime % 5 === 0) {
+    console.log(`[Tempo] Restante: ${remainingTime}s`);
+  }
+  
+  broadcastGameStatus();
+  
+  if (remainingTime <= 0) {
+    if (!currentMobSolved) {
+      console.log(`[Timeout] Ninguém descobriu! Era: ${selectedMob.iName}`);
+      updateMobHistory('timeout');
+    }
+    getNextMob();
+  }
 }
 
 async function getNextMob() {
   const db = await dbPromise;
   remainingTime = 30;
+  currentMobSolved = false;
+  currentAttempts = [];
+  currentMobStartTime = Date.now();
+  
   try {
-    const result = await db.get("SELECT * FROM mob_db ORDER BY RANDOM() LIMIT 1;")
+    const result = await db.get("SELECT * FROM mob_db ORDER BY RANDOM() LIMIT 1;");
     selectedMob = new Mob(result);
+    console.log(`[Novo Mob] ID: ${selectedMob.ID}, Nome: ${selectedMob.iName}`);
+    console.log(`[Status] Tentativas anteriores: ${currentAttempts.length}, Histórico: ${mobHistory.length} mobs`);
+    broadcastGameStatus();
   } catch (err) {
-    console.error("[Daily Job] Error:", err);
+    console.error("[NextMob] Error:", err);
   }
 }
 
+// Inicialização
 getNextMob();
-setInterval(()=> remainingTime > 0 ? countdown : getNextMob, 1000);
 
-app.listen(3000, () => console.log("Server rodando em http://localhost:3000"));
+// Timer para countdown
+setInterval(countdown, 1000);
+
+// Usar o servidor HTTP que tem o WebSocket vinculado
+server.listen(3000, () => {
+  console.log("[Server] HTTP e WebSocket rodando em http://localhost:3000");
+  console.log("[WebSocket] Endpoint: ws://localhost:3000");
+});
 
