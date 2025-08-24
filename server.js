@@ -82,8 +82,8 @@ function updateMobHistory(status, solverId = null) {
 }
 
 function updateScore(userId) {
-  const currentScore = scoreboard.get(userId) || 0;
   const userName = clients.get(userId)?.playerName || 'Unknown';
+  const currentScore = scoreboard.get(userName) || 0;
   scoreboard.set(userName, currentScore + 1);
 }
 
@@ -104,10 +104,6 @@ wss.on("connection", (ws, req) => {
   broadcastGameStatus();
 
   ws.on("message", (data) => {
-    if (currentMobSolved) {
-      console.log(`[Tentativa] Ignorada - Mob já foi descoberto`);
-      return;
-    }
 
     const message = data.toString();
     // Função para normalizar strings (remove acentos, caracteres especiais e converte para minúsculas)
@@ -124,7 +120,7 @@ wss.on("connection", (ws, req) => {
     console.log(`[Tentativa] ${playerName} tentou: "${message}" - ${isCorrect ? 'ACERTOU!' : 'Errou'}`);
     addAttempt(userId, message, isCorrect);
 
-    if (isCorrect) {
+    if (!currentMobSolved && isCorrect) {
       currentMobSolved = true;
       remainingTime = 6; // Define 6 segundos para mostrar a resposta
       updateScore(userId);
