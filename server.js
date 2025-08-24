@@ -36,7 +36,7 @@ function broadcastGameStatus() {
       ...attempt,
       playerName: clients.get(attempt.userId)?.playerName || attempt.userId
     })),
-    scoreboard: scoreboard,
+    scoreboard: Array.from(scoreboard),
     mobHistory: mobHistory.map(hist => ({
       ...hist,
       attempts: hist.attempts.map(attempt => ({
@@ -84,7 +84,7 @@ function updateMobHistory(status, solverId = null) {
 function updateScore(userId) {
   const currentScore = scoreboard.get(userId) || 0;
   const userName = clients.get(userId)?.playerName || 'Unknown';
-  scoreboard.set(userId, userName, currentScore + 1);
+  scoreboard.set(userName, currentScore + 1);
 }
 
 wss.on("connection", (ws, req) => {
@@ -110,7 +110,15 @@ wss.on("connection", (ws, req) => {
     }
 
     const message = data.toString();
-    const isCorrect = message === selectedMob.iName;
+    // Função para normalizar strings (remove acentos, caracteres especiais e converte para minúsculas)
+    const normalizeString = (str) => {
+      return str.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/[^a-z0-9\s]/g, ''); // Remove caracteres especiais
+    };
+    
+    const isCorrect = normalizeString(message) === normalizeString(selectedMob.iName);
     const playerName = clients.get(userId).playerName;
     
     console.log(`[Tentativa] ${playerName} tentou: "${message}" - ${isCorrect ? 'ACERTOU!' : 'Errou'}`);
