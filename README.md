@@ -4,7 +4,7 @@ Um jogo multiplayer em tempo real onde os jogadores tentam adivinhar o nome de m
 
 ## 🎮 Como Jogar
 
-1. Acesse o jogo em [disguise.onrender.com](https://disguise.onrender.com)
+1. Acesse o jogo em [disguise-front.onrender.com](https://disguise-front.onrender.com)
 2. Digite seu nome na tela de login
 3. Você verá uma imagem de um monstro do Ragnarok
 4. Digite o nome correto do monstro para ganhar pontos
