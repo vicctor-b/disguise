@@ -32,10 +32,7 @@ function broadcastGameStatus() {
     remainingTime,
     currentMobSolved,
     solverName: currentMobSolved ? (clients.get(currentAttempts.find(attempt => attempt.success)?.userId)?.playerName || 'Unknown') : null,
-    attempts: currentAttempts.map(attempt => ({
-      ...attempt,
-      playerName: clients.get(attempt.userId)?.playerName || attempt.userId
-    })),
+    attempts: Array.from(currentAttempts),
     scoreboard: Array.from(scoreboard),
     mobHistory: mobHistory.map(hist => ({
       ...hist,
@@ -55,8 +52,10 @@ function broadcastGameStatus() {
 }
 
 function addAttempt(userId, attempt, success) {
+  const playerName = clients.get(userId)?.playerName || 'Unknown';
   currentAttempts.push({
     userId,
+    playerName,
     attempt,
     success,
     ignored: currentMobSolved,
